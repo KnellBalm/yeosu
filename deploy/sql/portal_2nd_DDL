@@ -53,3 +53,9 @@ CREATE TABLE IF NOT EXISTS yeosu_dm.tb_local_pay_agg (
 )
 CREATE INDEX IF NOT EXISTS idx_tb_local_pay_std_ym
     ON yeosu_dm.tb_kcb((to_date(std_ym, 'YYYYMM')));
+
+
+-- 인구
+CREATE TABLE IF NOT EXISTS yeosu_dm.tb_population (
+    grid_id         CHAR(8) NOT NULL,
+)

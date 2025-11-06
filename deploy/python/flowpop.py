@@ -40,7 +40,7 @@ def setup_logger(script_name):
     return logger
 
 # -----------------------------------------------------------
-# ⚙️ 안전한 float 변환 함수
+# ⚙️ 안전한 변환 함수
 # -----------------------------------------------------------
 def safe_float(x):
     try:
@@ -48,28 +48,50 @@ def safe_float(x):
     except (TypeError, ValueError):
         return 0.0
 
+
+def normalize_date(etl_str: str) -> str:
+    """etl_ymd 문자열을 YYYY-MM-DD 형태로 변환"""
+    etl_str = etl_str.strip()
+    if "-" in etl_str:
+        return etl_str  # 이미 YYYY-MM-DD
+    elif len(etl_str) == 8:
+        return datetime.datetime.strptime(etl_str, "%Y%m%d").strftime("%Y-%m-%d")
+    elif len(etl_str) == 6:
+        return datetime.datetime.strptime(etl_str + "01", "%Y%m%d").strftime("%Y-%m-%d")
+    else:
+        raise ValueError(f"Unknown etl_ymd format: {etl_str}")
+    
 # -----------------------------------------------------------
 # 📅 월별 파티션 자동 생성 함수
 # -----------------------------------------------------------
 def ensure_partition(cur, etl_ymd_str):
-    """etl_ymd 값(YYYY-MM-DD) 기준으로 월별 파티션 생성"""
-    ymd = datetime.datetime.strptime(etl_ymd_str, "%Y-%m-%d").date()
+    """etl_ymd 값(YYYYMMDD 또는 YYYY-MM-DD)을 기준으로 월별 파티션 생성"""
+    # 입력 문자열 정규화
+    etl_ymd_str = etl_ymd_str.strip()
+
+    # 형식 자동 판별
+    if "-" in etl_ymd_str:
+        ymd = datetime.datetime.strptime(etl_ymd_str, "%Y-%m-%d").date()
+    elif len(etl_ymd_str) == 8:
+        ymd = datetime.datetime.strptime(etl_ymd_str, "%Y%m%d").date()
+    elif len(etl_ymd_str) == 6:
+        # YYYYMM 형태만 있는 경우 (예: 202501)
+        ymd = datetime.datetime.strptime(etl_ymd_str + "01", "%Y%m%d").date()
+    else:
+        raise ValueError(f"Unknown date format: {etl_ymd_str}")
+
     start = ymd.replace(day=1)
     next_month = (start.replace(day=28) + datetime.timedelta(days=4)).replace(day=1)
 
-    partition_name = f"yeosu_dm.tb_flowpop_{start.strftime('%Y%m')}"
-    sql_query = sql.SQL("""
+    partition_name = f"public.tb_flowpop_{start.strftime('%Y%m')}"
+    sql = f"""
     CREATE TABLE IF NOT EXISTS {partition_name}
-        PARTITION OF yeosu_dm.tb_flowpop
-        FOR VALUES FROM (%s) TO (%s);
-    CREATE INDEX IF NOT EXISTS {index_name}
+        PARTITION OF public.tb_flowpop
+        FOR VALUES FROM ('{start}') TO ('{next_month}');
+    CREATE INDEX IF NOT EXISTS idx_tb_flowpop_{start.strftime('%Y%m')}_timezn_ymd
         ON {partition_name} (timezn_cd, etl_ymd);
-    """).format(
-        partition_name=sql.Identifier(partition_name),
-        index_name=sql.Identifier(f"idx_tb_flowpop_{start.strftime('%Y%m')}_timezn_ymd")
-    )
-
-    cur.execute(sql_query, [str(start), str(next_month)])
+    """
+    cur.execute(sql)
     logger.info(f"📦 파티션 확인/생성 완료: {partition_name}")
     return partition_name
 
@@ -80,11 +102,11 @@ def load_flowpop(input_file):
     logger.info(f"시작: {input_file} 파일을 PostgreSQL로 적재합니다.")
 
     conn = psycopg2.connect(
-        dbname=os.getenv("DB_NAME", "postgres"),
+        dbname=os.getenv("DB_NAME", "yeosu_dm"),
         user=os.getenv("DB_USER", "root"),
-        password=os.getenv("DB_PASS", "password"),
-        host=os.getenv("DB_HOST", "localhost"),
-        port=os.getenv("DB_PORT", "5432")
+        password=os.getenv("DB_PASS", "biris.manse"),
+        host=os.getenv("DB_HOST", "192.168.109.254"),
+        port=os.getenv("DB_PORT", "32002")
     )
     cur = conn.cursor()
 
@@ -113,6 +135,7 @@ def load_flowpop(input_file):
 
         for row in reader:
             # etl_ymd 추출 (최초 한 번만)
+            row['etl_ymd'] = normalize_date(row['etl_ymd'])
             if first_etl_ymd is None:
                 first_etl_ymd = row['etl_ymd']
 
@@ -139,7 +162,7 @@ def load_flowpop(input_file):
             writer.writerow([row[c] for c in final_columns])
 
             row_count += 1
-            if row_count % 500000 == 0:
+            if row_count % 5000000 == 0:
                 logger.info(f"진행 중: {row_count:,}행 처리 완료")
 
         temp_file.flush()

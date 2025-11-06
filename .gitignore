@@ -1,5 +1,6 @@
 # Ignore log and csv files
 *.ipynb_checkpoints/
+*.swp
 *.shp
 *.prj
 *.dbf
@@ -25,3 +26,4 @@ yeosu_flow_pop/
 yeosu_road/
 unzipped_files/
 export_json/
+*.out
