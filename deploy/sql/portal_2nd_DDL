@@ -1,0 +1,23 @@
+CREATE TABLE IF NOT EXISTS yeosu_dm.tb_flowpop (
+    id          BIGINT,
+    type        VARCHAR(20),
+    timezn_cd   VARCHAR(10),
+    m10         DOUBLE PRECISION,
+    m20         DOUBLE PRECISION,
+    m30         DOUBLE PRECISION,
+    m40         DOUBLE PRECISION,
+    m50         DOUBLE PRECISION,
+    m60         DOUBLE PRECISION,
+    m70         DOUBLE PRECISION,
+    f10         DOUBLE PRECISION,
+    f20         DOUBLE PRECISION,
+    f30         DOUBLE PRECISION,
+    f40         DOUBLE PRECISION,
+    f50         DOUBLE PRECISION,
+    f60         DOUBLE PRECISION,
+    f70         DOUBLE PRECISION,
+    total       DOUBLE PRECISION,
+    etl_ymd     DATE NOT NULL
+)
+PARTITION BY RANGE (etl_ymd);
+
