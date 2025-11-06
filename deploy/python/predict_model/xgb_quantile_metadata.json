@@ -1,0 +1,19 @@
+{
+    "model_file": "xgb_quantile_bundle.joblib",
+    "trained_at": "2025-10-29 14:51:11",
+    "model_type": "XGBRegressor + QuantileTransformer",
+    "best_params": {
+        "regressor__learning_rate": 0.05,
+        "regressor__max_depth": 4,
+        "regressor__n_estimators": 200,
+        "regressor__subsample": 1.0
+    },
+    "r2": 0.05488780607537225,
+    "rmse": 13.354857644319118,
+    "features": [
+        "acs_cnt",
+        "hour",
+        "month",
+        "is_weekend_group"
+    ]
+}
