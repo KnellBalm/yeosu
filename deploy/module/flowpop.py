@@ -1,44 +1,13 @@
 import csv
-import psycopg2
-from psycopg2 import sql
 from io import StringIO
 import argparse
-import logging
 import sys
 import datetime
 import os
 import tempfile
 from dotenv import load_dotenv
 import glob
-
-# .env 파일 로드
-load_dotenv()
-# -----------------------------------------------------------
-# 🪶 로깅 설정
-# -----------------------------------------------------------
-def setup_logger(script_name):
-    log_dir = os.getenv("LOG_DIR", "./logs")  # 기본 로그 디렉토리
-    log_file_path = os.path.join(log_dir, f"{script_name}.log")  # 파일명 동적 설정
-
-    # 로그 디렉토리 생성
-    if not os.path.exists(log_dir):
-        os.makedirs(log_dir, exist_ok=True)
-
-    logger = logging.getLogger(script_name)
-    if not logger.handlers:  # 중복 방지
-        logging.basicConfig(
-            filename=log_file_path,
-            level=logging.INFO,
-            format="%(asctime)s [%(levelname)s] %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S"
-        )
-        console = logging.StreamHandler()
-        console.setLevel(logging.INFO)
-        formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
-        console.setFormatter(formatter)
-        logger.addHandler(console)
-        logger.info("📘 Logging initialized.")
-    return logger
+from module.utils import setup_logger, get_engine_from_env
 
 # -----------------------------------------------------------
 # ⚙️ 안전한 변환 함수
@@ -48,7 +17,6 @@ def safe_float(x):
         return float(x)
     except (TypeError, ValueError):
         return 0.0
-
 
 def normalize_date(etl_str: str) -> str:
     """etl_ymd 문자열을 YYYY-MM-DD 형태로 변환"""
@@ -102,13 +70,8 @@ def ensure_partition(cur, etl_ymd_str):
 def load_flowpop(input_file):
     logger.info(f"시작: {input_file} 파일을 PostgreSQL로 적재합니다.")
 
-    conn = psycopg2.connect(
-        dbname=os.getenv("DB_NAME", "yeosu_dm"),
-        user=os.getenv("DB_USER", "root"),
-        password=os.getenv("DB_PASS", "biris.manse"),
-        host=os.getenv("DB_HOST", "192.168.109.254"),
-        port=os.getenv("DB_PORT", "32002")
-    )
+    engine = get_engine_from_env()
+    conn = engine.raw_connection()
     cur = conn.cursor()
 
     # -----------------------------------------------------------

@@ -1,12 +1,10 @@
 import joblib
-import json
-import logging
 import pandas as pd
 import numpy as np
-from sqlalchemy import create_engine
 from dotenv import load_dotenv, find_dotenv
 import os
 from datetime import datetime, timedelta
+from module.utils import setup_logger, get_engine_from_env
 
 # .env 파일 로드
 bundle_path = "/DATA/jupyter_WorkingDirectory/notebook/yeosu/deploy/module/predict_model/xgb_quantile_bundle.joblib"
@@ -20,67 +18,21 @@ load_dotenv(env_path)
 # ============================================
 # 🪶 로깅 설정
 # ============================================
-def setup_logger(script_name):
-    log_dir = os.getenv("LOG_DIR", "./logs")  # 기본 로그 디렉토리
-    log_file_path = os.path.join(log_dir, f"{script_name}.log")  # 파일명 동적 설정
-
-    # 로그 디렉토리 생성
-    if not os.path.exists(log_dir):
-        os.makedirs(log_dir, exist_ok=True)
-
-    logger = logging.getLogger(script_name)
-    if not logger.handlers:  # 중복 방지
-        logging.basicConfig(
-            filename=log_file_path,
-            level=logging.INFO,
-            format="%(asctime)s [%(levelname)s] %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S"
-        )
-        console = logging.StreamHandler()
-        console.setLevel(logging.INFO)
-        formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
-        console.setFormatter(formatter)
-        logger.addHandler(console)
-        logger.info("📘 Logging initialized.")
-    return logger
-
 logger = setup_logger("wifi_predict")
 
 # ============================================
 # PostgreSQL 연결 생성
 # ============================================
-def get_source_engine():
-    db_config = {
-        "DB_USER": os.getenv("WIFI_DB_USER"),
-        "DB_PASS": os.getenv("WIFI_DB_PASS"),
-        "DB_HOST": os.getenv("WIFI_DB_HOST"),
-        "DB_PORT": os.getenv("WIFI_DB_PORT"),
-        "DB_NAME": os.getenv("WIFI_DB_NAME")
-    }
-
-    url = (
-        f"postgresql+psycopg2://{db_config['DB_USER']}:{db_config['DB_PASS']}"
-        f"@{db_config['DB_HOST']}:{db_config['DB_PORT']}/{db_config['DB_NAME']}"
-    )
-    return create_engine(url)
-
-def get_target_engine():
-    db_config = {
-        "DB_USER": os.getenv("DB_USER"),
-        "DB_PASS": os.getenv("DB_PASS"),
-        "DB_HOST": os.getenv("DB_HOST"),
-        "DB_PORT": os.getenv("DB_PORT"),
-        "DB_NAME": os.getenv("DB_NAME")
-    }
-
-    url = (
-        f"postgresql+psycopg2://{db_config['DB_USER']}:{db_config['DB_PASS']}"
-        f"@{db_config['DB_HOST']}:{db_config['DB_PORT']}/{db_config['DB_NAME']}"
-    )
-    return create_engine(url)
-
-source_engine = get_source_engine()
-target_engine = get_target_engine()
+# 소스 DB (와이파이)
+source_engine = get_engine_from_env(
+    user_env="WIFI_DB_USER",
+    pass_env="WIFI_DB_PASS",
+    host_env="WIFI_DB_HOST",
+    port_env="WIFI_DB_PORT",
+    name_env="WIFI_DB_NAME"
+)
+# 타겟 DB (결과값 적재)
+target_engine = get_engine_from_env()
 
 # ============================================
 # 📘 저장된 모델 및 전처리기 로드

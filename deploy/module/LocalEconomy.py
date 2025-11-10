@@ -1,12 +1,12 @@
 import argparse
 import pandas as pd
 import json
-import logging
 import os
 from sqlalchemy import create_engine
 from dotenv import load_dotenv
 from datetime import datetime
 import glob
+from module.utils import setup_logger, get_engine_from_env
 
 # =========================
 # 📁 공통 경로 정의
@@ -16,51 +16,6 @@ KCB_PATTERN = os.path.join(BASE_DIR, "YEOSU_SOHO_STAT_*.txt")
 IND_PATTERN = os.path.join(BASE_DIR, "YEOSU_IND_CODE*.txt")
 LOCAL_PAY_PATTERN = os.path.join(BASE_DIR, "local_pay_*.csv")
 LOCAL_GRID_JSON = os.path.join(BASE_DIR, "json/local_grid_id.json")
-
-
-# .env 파일 로드
-load_dotenv()
-
-# -----------------------------------------------------------
-# 🪶 로깅 설정
-# -----------------------------------------------------------
-def setup_logger(script_name):
-    log_dir = os.getenv("LOG_DIR", "./logs")
-    log_file_path = os.path.join(log_dir, f"{script_name}.log")
-    if not os.path.exists(log_dir):
-        os.makedirs(log_dir, exist_ok=True)
-    logger = logging.getLogger(script_name)
-    if not logger.handlers:
-        logging.basicConfig(
-            filename=log_file_path,
-            level=logging.INFO,
-            format="%(asctime)s [%(levelname)s] %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S"
-        )
-        console = logging.StreamHandler()
-        console.setLevel(logging.INFO)
-        formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
-        console.setFormatter(formatter)
-        logger.addHandler(console)
-        logger.info("📘 Logging initialized.")
-    return logger
-
-# ------------------------------------------------------------------------
-# PostgreSQL 연결 생성
-# ------------------------------------------------------------------------
-def get_engine():
-    db_config = {
-        "DB_USER": os.getenv("DB_USER"),
-        "DB_PASS": os.getenv("DB_PASS"),
-        "DB_HOST": os.getenv("DB_HOST"),
-        "DB_PORT": os.getenv("DB_PORT"),
-        "DB_NAME": os.getenv("DB_NAME")
-    }
-    url = (
-        f"postgresql+psycopg2://{db_config['DB_USER']}:{db_config['DB_PASS']}"
-        f"@{db_config['DB_HOST']}:{db_config['DB_PORT']}/{db_config['DB_NAME']}"
-    )
-    return create_engine(url)
 
 # ------------------------------------------------------------------------
 # KCB 데이터 처리 및 적재
@@ -106,7 +61,7 @@ def process_kcb(logger):
     }, inplace=True)
     kcb["reg_dttm"] = datetime.now()
     logger.info(f"KCB 데이터 정제 완료: {kcb.shape[0]} rows, {kcb.shape[1]} columns")
-    engine = get_engine()
+    engine = get_engine_from_env()
     kcb.to_sql(name='tb_kcb_stat', con=engine, if_exists='append', index=False, chunksize=10000, method='multi')
     logger.info("✅ KCB 데이터 DB 적재 완료")
 
@@ -135,7 +90,7 @@ def process_local(logger):
     )[['grid_id', 'std_ym', '업종', 'pay_cnt', 'pay_amt']]
     local_pay_agg['reg_dttm'] = datetime.now()
     logger.info(f"Local Pay 집계 완료: {local_pay_agg.shape[0]} rows")
-    engine = get_engine()
+    engine = get_engine_from_env()
     local_pay_agg.to_sql(name='tb_local_pay_agg', con=engine, if_exists='append', index=False, chunksize=10000, method='multi')
     logger.info("✅ Local Pay 데이터 DB 적재 완료")
 
@@ -146,7 +101,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="KCB / Local Pay 데이터 처리 및 DB 적재")
     parser.add_argument("--target", type=str, required=True, choices=["kcb", "local"], help="처리할 데이터 종류 선택")
     args = parser.parse_args()
-    logger = setup_logger("LocalEconomy")
+    logger = setup_logger(f"LocalEconomy-{args.target.upper()}")
     logger.info(f"▶ 실행 대상: {args.target.upper()}")
     try:
         if args.target == "kcb":
