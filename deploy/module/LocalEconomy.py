@@ -6,7 +6,7 @@ from sqlalchemy import create_engine
 from dotenv import load_dotenv
 from datetime import datetime
 import glob
-from module.utils import setup_logger, get_engine_from_env
+from utils import setup_logger, get_engine_from_env
 
 # =========================
 # 📁 공통 경로 정의
@@ -91,7 +91,7 @@ def process_local(logger):
     local_pay_agg['reg_dttm'] = datetime.now()
     logger.info(f"Local Pay 집계 완료: {local_pay_agg.shape[0]} rows")
     engine = get_engine_from_env()
-    local_pay_agg.to_sql(name='tb_local_pay_agg', con=engine, if_exists='append', index=False, chunksize=10000, method='multi')
+    local_pay_agg.to_sql(name='tb_local_pay_agg', con=engine, if_exists='append', index=False, chunksize=100000, method='multi')
     logger.info("✅ Local Pay 데이터 DB 적재 완료")
 
 # ------------------------------------------------------------------------

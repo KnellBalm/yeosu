@@ -4,7 +4,7 @@ import json
 import logging
 import os
 from datetime import datetime
-from module.utils import setup_logger, get_engine_from_env
+from utils import setup_logger, get_engine_from_env
 
 
 def process_normal(logger, engine):

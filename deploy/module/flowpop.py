@@ -7,7 +7,7 @@ import os
 import tempfile
 from dotenv import load_dotenv
 import glob
-from module.utils import setup_logger, get_engine_from_env
+from utils import setup_logger, get_engine_from_env
 
 # -----------------------------------------------------------
 # ⚙️ 안전한 변환 함수

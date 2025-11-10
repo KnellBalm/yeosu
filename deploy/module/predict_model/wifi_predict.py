@@ -4,7 +4,7 @@ import numpy as np
 from dotenv import load_dotenv, find_dotenv
 import os
 from datetime import datetime, timedelta
-from module.utils import setup_logger, get_engine_from_env
+from utils import setup_logger, get_engine_from_env
 
 # .env 파일 로드
 bundle_path = "/DATA/jupyter_WorkingDirectory/notebook/yeosu/deploy/module/predict_model/xgb_quantile_bundle.joblib"
