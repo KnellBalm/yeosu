@@ -1,5 +1,13 @@
-CREATE TABLE IF NOT EXISTS yeosu_dm.tb_flowpop (
-    id          CHAR(8),
+CREATE TABLE IF NOT EXISTS public.tb_wifi_prediction (
+    grid_id         CHAR(8) NOT NULL,
+    std_date        TIMESTAMP NOT NULL,
+    predicted_total INTEGER NOT NULL,
+    acs_cnt         INTEGER NOT NULL,
+    reg_dttm        TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS public.tb_flowpop (
+    grid_id     CHAR(8),
     type        VARCHAR(20),
     timezn_cd   VARCHAR(10),
     m10         DOUBLE PRECISION,
@@ -18,42 +26,43 @@ CREATE TABLE IF NOT EXISTS yeosu_dm.tb_flowpop (
     f70         DOUBLE PRECISION,
     total       DOUBLE PRECISION,
     etl_ymd     DATE NOT NULL
+
 )
 PARTITION BY RANGE (etl_ymd);
 
 -- KCB 집계 테이블
-CREATE TABLE IF NOT EXISTS yeosu_dm.tb_kcb(
-    qid50                  CHAR(8) NOT NULL,
-    bs_yr_mon              CHAR(6) NOT NULL,  -- YYYYMM 형식
+CREATE TABLE IF NOT EXISTS public.tb_kcb_stat(
+    grid_id                CHAR(8) NOT NULL,
+    std_ym                 CHAR(6) NOT NULL,  -- YYYYMM 형식
     sic_cd_lv4             VARCHAR(10),
+    sic_fst_clsfy_itm_nm   VARCHAR(100),
+    sic_scnd_clsfy_itm_nm  VARCHAR(100),
+    sic_trd_clsfy_itm_nm   VARCHAR(100),
+    sic_four_clsfy_itm_nm  VARCHAR(100),
     shop_cnt               INTEGER,
     op_cnt                 INTEGER,
     new_opn_cnt            INTEGER,
     run_out_cnt            INTEGER,
     tot_sale_amt           NUMERIC(18,2),
     tot_sales_amt0_cnt     INTEGER,
-    tot_sales_amt5_cnt     INTEGER,
-    sic_fst_clsfy_itm_nm   VARCHAR(100),
-    sic_scnd_clsfy_itm_nm  VARCHAR(100),
-    sic_trd_clsfy_itm_nm   VARCHAR(100),
-    sic_four_clsfy_itm_nm  VARCHAR(100),
-    created_at             TIMESTAMP DEFAULT NOW()
+    tot_sales_amt5m_cnt    INTEGER,
+    reg_dttm               TIMESTAMP
 );
 -- 날짜 캐스팅 인덱스 (기간 비교를 위한 WHERE 절에서 활용)
 CREATE INDEX IF NOT EXISTS idx_tb_kcb_bs_yr_mon_date
-    ON yeosu_dm.tb_kcb((to_date(bs_yr_mon, 'YYYYMM')));
+    ON public.tb_kcb((to_date(bs_yr_mon, 'YYYYMM')));
 
 -- 지역화폐 집계 테이블
-CREATE TABLE IF NOT EXISTS yeosu_dm.tb_local_pay_agg (
+CREATE TABLE IF NOT EXISTS public.tb_local_pay_agg (
     grid_id                 CHAR(8) NOT NULL,    
     std_ym                  CHAR(6) NOT NULL,  -- YYYYMM 형식
     ind_type                VARCHAR(50),
     pay_cnt                 INTEGER,
-    pay_amt                 INTEGER
-)
+    pay_amt                 INTEGER,
+    reg_dttm                TIMESTAMP
+)   
 CREATE INDEX IF NOT EXISTS idx_tb_local_pay_std_ym
-    ON yeosu_dm.tb_kcb((to_date(std_ym, 'YYYYMM')));
-
+    ON public.tb_kcb((to_date(std_ym, 'YYYYMM')));
 
 -- 인구
 CREATE TABLE IF NOT EXISTS yeosu_dm.tb_population (

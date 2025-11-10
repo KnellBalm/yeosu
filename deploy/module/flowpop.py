@@ -9,6 +9,7 @@ import datetime
 import os
 import tempfile
 from dotenv import load_dotenv
+import glob
 
 # .env 파일 로드
 load_dotenv()
@@ -199,13 +200,25 @@ def load_flowpop(input_file):
 # -----------------------------------------------------------
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="FLOWPOP 월별 데이터 적재 스크립트")
-    parser.add_argument("--input", required=True, help="입력 CSV 파일 경로")
+    parser.add_argument("--ym", required=True, help="적재할 월(YYYYMM)")
     logger = setup_logger("flowpop")
     logger.info("▶ 스크립트 시작")
     args = parser.parse_args()
 
+    # 소스 디렉토리 
+    SRC_DIR = "/DATA/jupyter_WorkingDirectory/notebook/yeosu/deploy/data/"
+    pattern = f"*flow_age_time*{args.ym}*.csv"
+    matched_files = sorted(glob.glob(os.path.join(SRC_DIR, pattern)))
+
+    # 파일 탐색
+    if not matched_files:
+        logger.error(f"❌ {args.ym}이(가) 포함된 CSV 파일을 {SRC_DIR}에서 찾을 수 없습니다.")
+        sys.exit(1)
+
+    input_file = matched_files[-1]
+    logger.info(f"선택된 파일: {input_file}")
     try:
-        load_flowpop(args.input)
+        load_flowpop(input_file)
     except Exception as e:
         logger.exception(f"❌ 오류 발생: {e}")
         sys.exit(1)
