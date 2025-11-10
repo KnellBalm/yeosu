@@ -37,8 +37,6 @@ CREATE TABLE IF NOT EXISTS public.tb_kcb_stat(
     sic_cd_lv4             VARCHAR(10),
     sic_fst_clsfy_itm_nm   VARCHAR(100),
     sic_scnd_clsfy_itm_nm  VARCHAR(100),
-    sic_trd_clsfy_itm_nm   VARCHAR(100),
-    sic_four_clsfy_itm_nm  VARCHAR(100),
     shop_cnt               INTEGER,
     op_cnt                 INTEGER,
     new_opn_cnt            INTEGER,

@@ -41,7 +41,7 @@ def process_kcb(logger):
     ]
     kcb.drop(columns=drop_cols, inplace=True)
     kcb = kcb[[
-        'QID50', 'BS_YR_MON', 'SIC_CD_LV4','SIC_FST_CLSFY_ITM_NM', 'SIC_SCND_CLSFY_ITM_NM','SIC_TRD_CLSFY_ITM_NM', 'SIC_FOUR_CLSFY_ITM_NM',
+        'QID50', 'BS_YR_MON', 'SIC_CD_LV4','SIC_FST_CLSFY_ITM_NM', 'SIC_SCND_CLSFY_ITM_NM',
         'SHOP_CNT', 'OP_CNT', 'NEW_OPN_CNT', 'RUN_OUT_CNT', 'TOT_SALE_AMT', 'TOT_SALES_AMT0_CNT',  'TOT_SALES_AMT5_CNT', ]]
     kcb.rename(columns={
         'QID50': 'grid_id',
@@ -49,8 +49,6 @@ def process_kcb(logger):
         'SIC_CD_LV4': 'sic_cd_lv4',
         'SIC_FST_CLSFY_ITM_NM': 'sic_fst_clsfy_itm_nm',
         'SIC_SCND_CLSFY_ITM_NM': 'sic_scnd_clsfy_itm_nm',
-        'SIC_TRD_CLSFY_ITM_NM': 'sic_trd_clsfy_itm_nm',
-        'SIC_FOUR_CLSFY_ITM_NM': 'sic_four_clsfy_itm_nm',
         'SHOP_CNT': 'shop_cnt',
         'OP_CNT': 'op_cnt',
         'NEW_OPN_CNT': 'new_opn_cnt',
