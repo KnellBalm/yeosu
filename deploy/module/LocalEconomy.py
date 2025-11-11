@@ -6,15 +6,15 @@ from sqlalchemy import create_engine
 from dotenv import load_dotenv
 from datetime import datetime
 import glob
-from utils import setup_logger, get_engine_from_env
+from utils import setup_logger, get_engine_from_env, get_src_dir
 
 # =========================
 # 📁 공통 경로 정의
 # =========================
-BASE_DIR = "/DATA/jupyter_WorkingDirectory/notebook/yeosu/deploy/data"
-KCB_PATTERN = os.path.join(BASE_DIR, "YEOSU_SOHO_STAT_*.txt")
-IND_PATTERN = os.path.join(BASE_DIR, "YEOSU_IND_CODE*.txt")
-LOCAL_PAY_PATTERN = os.path.join(BASE_DIR, "local_pay_*.csv")
+BASE_DIR = get_src_dir()
+KCB_PATTERN = os.path.join(BASE_DIR, "YEOSU_SOHO_STAT_*")
+IND_PATTERN = os.path.join(BASE_DIR, "YEOSU_IND_CODE*")
+LOCAL_PAY_PATTERN = os.path.join(BASE_DIR, "local_pay_*")
 LOCAL_GRID_JSON = os.path.join(BASE_DIR, "json/local_grid_id.json")
 
 # ------------------------------------------------------------------------
@@ -42,25 +42,19 @@ def process_kcb(logger):
     kcb.drop(columns=drop_cols, inplace=True)
     kcb = kcb[[
         'QID50', 'BS_YR_MON', 'SIC_CD_LV4','SIC_FST_CLSFY_ITM_NM', 'SIC_SCND_CLSFY_ITM_NM',
-        'SHOP_CNT', 'OP_CNT', 'NEW_OPN_CNT', 'RUN_OUT_CNT', 'TOT_SALE_AMT', 'TOT_SALES_AMT0_CNT',  'TOT_SALES_AMT5_CNT', ]]
+        'SHOP_CNT', 'OP_CNT', 'NEW_OPN_CNT', 'RUN_OUT_CNT', 'TOT_SALE_AMT', 'TOT_SALES_AMT0_CNT', 'TOT_SALES_AMT5_CNT',]]
+    kcb.columns = [col.lower() for col in kcb.columns]
     kcb.rename(columns={
-        'QID50': 'grid_id',
-        'BS_YR_MON': 'std_ym',
-        'SIC_CD_LV4': 'sic_cd_lv4',
-        'SIC_FST_CLSFY_ITM_NM': 'sic_fst_clsfy_itm_nm',
-        'SIC_SCND_CLSFY_ITM_NM': 'sic_scnd_clsfy_itm_nm',
-        'SHOP_CNT': 'shop_cnt',
-        'OP_CNT': 'op_cnt',
-        'NEW_OPN_CNT': 'new_opn_cnt',
-        'RUN_OUT_CNT': 'run_out_cnt',
-        'TOT_SALE_AMT': 'tot_sale_amt',
-        'TOT_SALES_AMT0_CNT': 'tot_sales_amt0_cnt',
-        'TOT_SALES_AMT5_CNT': 'tot_sales_amt5m_cnt'
+        'qid50': 'grid_id',
+        'bs_yr_mon': 'std_ym',
+        'tot_sales_amt5_cnt': 'tot_sales_amt5m_cnt'
     }, inplace=True)
+    kcb['grid_id'] = kcb['grid_id'].astype(str)
+    kcb['std_ym'] = kcb['std_ym'].astype(str)
     kcb["reg_dttm"] = datetime.now()
     logger.info(f"KCB 데이터 정제 완료: {kcb.shape[0]} rows, {kcb.shape[1]} columns")
     engine = get_engine_from_env()
-    kcb.to_sql(name='tb_kcb_stat', con=engine, if_exists='append', index=False, chunksize=10000, method='multi')
+    kcb.to_sql(name='tb_kcb_stat', con=engine, if_exists='append', index=False, method='multi')
     logger.info("✅ KCB 데이터 DB 적재 완료")
 
 # ------------------------------------------------------------------------
@@ -86,10 +80,12 @@ def process_local(logger):
         pay_cnt=('번호', 'count'),
         pay_amt=('결제금액', 'sum')
     )[['grid_id', 'std_ym', '업종', 'pay_cnt', 'pay_amt']]
+    local_pay_agg.rename(columns={'업종': 'ind_type'}, inplace=True)
     local_pay_agg['reg_dttm'] = datetime.now()
+    local_pay_agg['grid_id'] = local_pay_agg['grid_id'].astype(str)
     logger.info(f"Local Pay 집계 완료: {local_pay_agg.shape[0]} rows")
     engine = get_engine_from_env()
-    local_pay_agg.to_sql(name='tb_local_pay_agg', con=engine, if_exists='append', index=False, chunksize=100000, method='multi')
+    local_pay_agg.to_sql(name='tb_local_pay_agg', con=engine, if_exists='append', index=False, method='multi')
     logger.info("✅ Local Pay 데이터 DB 적재 완료")
 
 # ------------------------------------------------------------------------

@@ -5,9 +5,8 @@ import sys
 import datetime
 import os
 import tempfile
-from dotenv import load_dotenv
 import glob
-from utils import setup_logger, get_engine_from_env
+from utils import setup_logger, get_engine_from_env, get_src_dir
 
 # -----------------------------------------------------------
 # ⚙️ 안전한 변환 함수
@@ -169,7 +168,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # 소스 디렉토리 
-    SRC_DIR = "/DATA/jupyter_WorkingDirectory/notebook/yeosu/deploy/data/"
+    SRC_DIR = get_src_dir()
     pattern = f"*flow_age_time*{args.ym}*.csv"
     matched_files = sorted(glob.glob(os.path.join(SRC_DIR, pattern)))
 

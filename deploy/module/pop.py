@@ -1,22 +1,42 @@
 import argparse
 import pandas as pd
-import json
-import logging
-import os
 from datetime import datetime
 from utils import setup_logger, get_engine_from_env
 
+# =========================
+# DB 연결 설정
+engine = get_engine_from_env()
 
+# -----------------------------------------------------------  
+# 📥 일반 인구 데이터 처리 함수
 def process_normal(logger, engine):
     logger.info("🚀 일반 인구 데이터 처리 시작")
-    # 데이터 처리 로직 구현
-    # 예: CSV 파일 로드, 전처리, DB 적재 등
+    
+    query = f"""
+        SELECT *
+        FROM public.tb_population_normal
+        where etl_ymd >= '2023-01-01'
+        """
+    logger.debug(f"{query=}")
+    df = pd.read_sql_query(query, engine)
+
     logger.info("✅ 일반 인구 데이터 처리 완료")    
 
+# -----------------------------------------------------------
+# 📥 전출입 인구 데이터 처리 함수
 def process_inout(logger, engine):
     logger.info("🚀 전출입 인구 데이터 처리 시작")
-    # 데이터 처리 로직 구현
-    # 예: CSV 파일 로드, 전처리, DB 적재 등
+    
+    query = f"""
+    SELECT *
+    FROM public.tb_population_normal
+    where etl_ymd >= '2023-01-01'
+    """
+    logger.debug(f"{query=}")
+
+    df = pd.read_sql_query(query, engine)
+
+
     logger.info("✅ 전출입 인구 데이터 처리 완료")
 
 

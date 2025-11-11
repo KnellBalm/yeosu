@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 # .env 파일 로드 (한 번만)
 load_dotenv()
 
-def setup_logger(script_name):
+def setup_logger(script_name) -> logging.Logger:
     log_dir = os.getenv("LOG_DIR", "./logs")
     log_file_path = os.path.join(log_dir, f"{script_name}.log")
     if not os.path.exists(log_dir):
@@ -40,3 +40,6 @@ def get_engine_from_env(
         f"@{db_config['DB_HOST']}:{db_config['DB_PORT']}/{db_config['DB_NAME']}"
     )
     return create_engine(url)
+
+def get_src_dir():
+    return os.getenv("SRC_DIR", "../data")

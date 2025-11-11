@@ -53,7 +53,7 @@ CREATE INDEX IF NOT EXISTS idx_tb_kcb_bs_yr_mon_date
 -- 지역화폐 집계 테이블
 CREATE TABLE IF NOT EXISTS public.tb_local_pay_agg (
     grid_id                 CHAR(8) NOT NULL,    
-    std_ym                  CHAR(6) NOT NULL,  -- YYYYMM 형식
+    std_ym                  TIMESTAMP,  -- YYYYMM 형식
     ind_type                VARCHAR(50),
     pay_cnt                 INTEGER,
     pay_amt                 INTEGER,
