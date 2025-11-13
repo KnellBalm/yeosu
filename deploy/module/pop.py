@@ -1,47 +1,137 @@
-import argparse
 import pandas as pd
-from datetime import datetime
+from sqlalchemy import text
+from datetime import datetime, timedelta
 from utils import setup_logger, get_engine_from_env
+import re
+import json
 
-# =========================
-# DB 연결 설정
-engine = get_engine_from_env()
-
-# -----------------------------------------------------------  
-# 📥 일반 인구 데이터 처리 함수
-def process_normal(logger, engine):
-    logger.info("🚀 일반 인구 데이터 처리 시작")
-    
-    query = f"""
-        SELECT *
-        FROM public.tb_population_normal
-        where etl_ymd >= '2023-01-01'
-        """
-    logger.debug(f"{query=}")
-    df = pd.read_sql_query(query, engine)
-
-    logger.info("✅ 일반 인구 데이터 처리 완료")    
-
-# -----------------------------------------------------------
-# 📥 전출입 인구 데이터 처리 함수
-def process_inout(logger, engine):
-    logger.info("🚀 전출입 인구 데이터 처리 시작")
-    
-    query = f"""
-    SELECT *
-    FROM public.tb_population_normal
-    where etl_ymd >= '2023-01-01'
+# ===============================
+# 📘 1. SQL 파서
+# ===============================
+def load_sql_sections(file_path: str) -> dict[str, str]:
     """
-    logger.debug(f"{query=}")
+    하나의 .sql 파일 안의 여러 쿼리를 주석 구분자(-- [쿼리명]) 기준으로 파싱합니다.
+    """
+    queries = {}
+    current_name = None
+    buffer = []
+    pattern = re.compile(r"--\s*\[(.*?)\]")
 
-    df = pd.read_sql_query(query, engine)
+    with open(file_path, "r", encoding="utf-8") as f:
+        for line in f:
+            match = pattern.match(line.strip())
+            if match:
+                if current_name and buffer:
+                    queries[current_name] = "\n".join(buffer).strip()
+                    buffer = []
+                current_name = match.group(1).strip()
+            elif not line.strip().startswith("--"):
+                buffer.append(line.rstrip())
+        if current_name and buffer:
+            queries[current_name] = "\n".join(buffer).strip()
+    return queries
 
 
-    logger.info("✅ 전출입 인구 데이터 처리 완료")
+# ===============================
+# 🧩 2. SQL 실행 / 적재 함수
+# ===============================
+def run_sql(engine, query: str, params: dict | None = None) -> pd.DataFrame:
+    with engine.connect() as conn:
+        result = conn.execute(text(query), params or {})
+        df = pd.DataFrame(result.fetchall(), columns=result.keys())
+    return df
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="인구 데이터 일반/전출입 처리 및 DB 적재")
-    parser.add_argument("--target", type=str, required=True, choices=["normal", "inout"], help="처리할 데이터 종류 선택")
-    args = parser.parse_args()
-    logger = setup_logger(f"Popluation-{args.target.upper()}")
+def write_to_db(df: pd.DataFrame, table_name: str, engine, schema: str = None, if_exists: str = "replace"):
+    df.to_sql(
+        name=table_name,
+        con=engine,
+        schema=schema,
+        if_exists=if_exists,
+        index=False,
+        method="multi"
+    )
+
+
+# ===============================
+# 🧹 3. 전처리 함수
+# ===============================
+
+def preprocess_house(df: pd.DataFrame, pop_grid_id: dict) -> pd.DataFrame:
+    df = df.dropna()
+    df = df.groupby(['jumin_rd_code'], as_index=False).agg(
+        household_cnt=('member_count', 'sum')
+    )
+    df['grid_id'] = df['jumin_rd_code'].map(pop_grid_id)
+    df = df[df['grid_id'].str.len() == 8]
+    return df
+
+
+def preprocess_inflow(df: pd.DataFrame, pop_grid_id: dict) -> pd.DataFrame:
+    df = df.dropna()
+    df['gens'] = (df['age'] // 10 * 10).astype(int)
+    df['grid_id'] = df['jumin_inr_rd_code'].map(pop_grid_id)
+    df = df.groupby(['grid_id', 'gender', 'gens'], as_index=False).agg(
+        member_cnt=('jumin_sid', 'count')
+    )
+    df = df[df['grid_id'].str.len() == 8]
+    return df
+
+
+def preprocess_outflow(df: pd.DataFrame, pop_grid_id: dict) -> pd.DataFrame:
+    df = df.dropna()
+    df['gens'] = (df['age'] // 10 * 10).astype(int)
+    df['grid_id'] = df['jumin_exr_rd_code'].map(pop_grid_id)
+    df = df.groupby(['grid_id', 'gender', 'gens'], as_index=False).agg(
+        member_cnt=('jumin_sid', 'count')
+    )
+    df = df[df['grid_id'].str.len() == 8]
+    return df
+
+
+def preprocess_totpop(df: pd.DataFrame, pop_grid_id: dict) -> pd.DataFrame:
+    df = df.dropna()
+    df['gens'] = (df['age'] // 10 * 10).astype(int)
+    df['grid_id'] = df['jumin_rd_code'].map(pop_grid_id)
+    df = df.groupby(['grid_id', 'gens', 'gender'], as_index=False).agg(
+        member_cnt=('jumin_sid', 'count')
+    )
+    df = df[df['grid_id'].str.len() == 8]
+    return df
+
+# ===============================
+# 🚀 메인 파이프라인
+# ===============================
+
+logger = setup_logger("Population-Pipeline")
+logger.info("🏁 파이프라인 시작")
+
+engine = get_engine_from_env()
+queries = load_sql_sections('../sql/yeosu_query_251113.sql')
+pop_grid_id = json.load(open('../data/json/pop_grid_id.json'))
+
+# 1️⃣ 세대별
+house_df = run_sql(engine, queries["1"], params)
+house_df = preprocess_house(house_df, pop_grid_id)
+write_to_db(house_df, "tb_pop_household_count", engine)
+logger.info("✅ 세대별 완료")
+
+# 2️⃣ 전입자
+inflow_df = run_sql(engine, queries["2"], params)
+inflow_df = preprocess_inflow(inflow_df, pop_grid_id)
+write_to_db(inflow_df, "tb_gmc_inflow_result", engine)
+logger.info("✅ 전입자 완료")
+
+# 3️⃣ 전출자
+outflow_df = run_sql(engine, queries["3"], params)
+outflow_df = preprocess_outflow(outflow_df, pop_grid_id)
+write_to_db(outflow_df, "tb_gmc_outflow_result", engine)
+logger.info("✅ 전출자 완료")
+
+# 4️⃣ 총인구
+totpop_df = run_sql(engine, queries["4"], params)
+totpop_df = preprocess_totpop(totpop_df, pop_grid_id)
+write_to_db(totpop_df, "tb_pop_cnt_result", engine)
+logger.info("✅ 총인구 완료")
+
+logger.info("🎯 전체 파이프라인 완료")

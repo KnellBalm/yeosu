@@ -57,7 +57,7 @@ def ensure_partition(cur, etl_ymd_str):
         PARTITION OF public.tb_flowpop
         FOR VALUES FROM ('{start}') TO ('{next_month}');
     CREATE INDEX IF NOT EXISTS idx_tb_flowpop_{start.strftime('%Y%m')}_timezn_ymd
-        ON {partition_name} (timezn_cd, etl_ymd);
+        ON {partition_name} (etl_ymd, timezn_cd, id);
     """
     cur.execute(sql)
     logger.info(f"📦 파티션 확인/생성 완료: {partition_name}")
