@@ -57,15 +57,13 @@ def write_to_db(df: pd.DataFrame, table_name: str, engine, schema: str = None, i
 # 🧹 3. 전처리 함수
 # ===============================
 
-def preprocess_house(df: pd.DataFrame, pop_grid_id: dict) -> pd.DataFrame:
+def preprocess_household(df: pd.DataFrame, pop_grid_id: dict) -> pd.DataFrame:
     df = df.dropna()
-    df = df.groupby(['jumin_rd_code'], as_index=False).agg(
-        household_cnt=('member_count', 'sum')
-    )
     df['grid_id'] = df['jumin_rd_code'].map(pop_grid_id)
+    df.drop(columns=['jumin_rd_code'],inplace=True)
     df = df[df['grid_id'].str.len() == 8]
+    df = df[['grid_id', 'mem_cnt1', 'mem_cnt2', 'mem_cnt3', 'mem_cnt4']]
     return df
-
 
 def preprocess_inflow(df: pd.DataFrame, pop_grid_id: dict) -> pd.DataFrame:
     df = df.dropna()
@@ -77,7 +75,6 @@ def preprocess_inflow(df: pd.DataFrame, pop_grid_id: dict) -> pd.DataFrame:
     df = df[df['grid_id'].str.len() == 8]
     return df
 
-
 def preprocess_outflow(df: pd.DataFrame, pop_grid_id: dict) -> pd.DataFrame:
     df = df.dropna()
     df['gens'] = (df['age'] // 10 * 10).astype(int)
@@ -87,7 +84,6 @@ def preprocess_outflow(df: pd.DataFrame, pop_grid_id: dict) -> pd.DataFrame:
     )
     df = df[df['grid_id'].str.len() == 8]
     return df
-
 
 def preprocess_totpop(df: pd.DataFrame, pop_grid_id: dict) -> pd.DataFrame:
     df = df.dropna()
@@ -103,7 +99,7 @@ def preprocess_totpop(df: pd.DataFrame, pop_grid_id: dict) -> pd.DataFrame:
 # 🚀 메인 파이프라인
 # ===============================
 
-logger = setup_logger("Population-Pipeline")
+logger = setup_logger("population")
 logger.info("🏁 파이프라인 시작")
 
 engine = get_engine_from_env()
@@ -111,27 +107,27 @@ queries = load_sql_sections('../sql/yeosu_query_251113.sql')
 pop_grid_id = json.load(open('../data/json/pop_grid_id.json'))
 
 # 1️⃣ 세대별
-house_df = run_sql(engine, queries["1"], params)
-house_df = preprocess_house(house_df, pop_grid_id)
+house_df = run_sql(engine, queries["1"])
+house_df = preprocess_household(house_df, pop_grid_id)
 write_to_db(house_df, "tb_pop_household_count", engine)
 logger.info("✅ 세대별 완료")
 
 # 2️⃣ 전입자
-inflow_df = run_sql(engine, queries["2"], params)
+inflow_df = run_sql(engine, queries["2"])
 inflow_df = preprocess_inflow(inflow_df, pop_grid_id)
-write_to_db(inflow_df, "tb_gmc_inflow_result", engine)
+write_to_db(inflow_df, "tb_pop_inflow_count", engine)
 logger.info("✅ 전입자 완료")
 
 # 3️⃣ 전출자
-outflow_df = run_sql(engine, queries["3"], params)
+outflow_df = run_sql(engine, queries["3"])
 outflow_df = preprocess_outflow(outflow_df, pop_grid_id)
-write_to_db(outflow_df, "tb_gmc_outflow_result", engine)
+write_to_db(outflow_df, "tb_pop_outflow_count", engine)
 logger.info("✅ 전출자 완료")
 
 # 4️⃣ 총인구
-totpop_df = run_sql(engine, queries["4"], params)
+totpop_df = run_sql(engine, queries["4"])
 totpop_df = preprocess_totpop(totpop_df, pop_grid_id)
-write_to_db(totpop_df, "tb_pop_cnt_result", engine)
+write_to_db(totpop_df, "tb_pop_total_count", engine)
 logger.info("✅ 총인구 완료")
 
 logger.info("🎯 전체 파이프라인 완료")

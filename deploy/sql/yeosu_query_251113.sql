@@ -11,8 +11,8 @@ with household AS (
     WHERE head.jumin_state_code IN ('10', '13', '43')
       AND head.data_crtr_dt = (select MAX(data_crtr_dt) from tb_gmc_hshldr_info) -- #변수#
     GROUP BY head.jumin_head_sid
-)
-SELECT
+),
+preproc as (SELECT
     household.jumin_head_sid,
     household.member_count, -- 세대원 수
     head.jumin_head_sid_sno, -- 세대주주민일련번호
@@ -20,7 +20,16 @@ SELECT
     head.data_crtr_dt
 from household
 LEFT JOIN tb_gmc_hshldr_info head ON household.jumin_head_sid = head.jumin_head_sid
-WHERE head.data_crtr_dt = (select MAX(data_crtr_dt) from tb_gmc_hshldr_info); -- #변수#
+WHERE head.data_crtr_dt = (select MAX(data_crtr_dt) from tb_gmc_hshldr_info)
+)
+select 
+    jumin_rd_code,
+    sum(case when member_count = 1 then 1 else 0 end ) as mem_cnt1,
+    sum(case when member_count = 2 then 1 else 0 end ) as mem_cnt2,
+    sum(case when member_count = 3 then 1 else 0 end ) as mem_cnt3,
+    sum(case when member_count >= 4 then 1 else 0 end) as mem_cnt4
+from preproc group by jumin_rd_code
+; -- #변수#
 
 
 -- ####################
