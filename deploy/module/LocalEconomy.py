@@ -2,8 +2,6 @@ import argparse
 import pandas as pd
 import json
 import os
-from sqlalchemy import create_engine
-from dotenv import load_dotenv
 from datetime import datetime
 import glob
 from utils import setup_logger, get_engine_from_env, get_src_dir

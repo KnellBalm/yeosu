@@ -58,9 +58,9 @@ start_date = (today - timedelta(days=60)).strftime('%Y-%m-%d')  # 30일 전부�
 logger.info(f"📅 동적 날짜 설정: {start_date} 이후 데이터 로드")
 
 query = f"""
-        SELECT ap_id, std_date, cnt AS acs_cnt
-        FROM ap.log_summary
-        WHERE LEFT(std_date, 10)::date >= '{start_date}'
+        SELECT std_date, ap_id, cnt, dong_nm, detail_address, "location", weekday, "date", "hour", mac
+        FROM ap.log_summary_rukus where std_date = (select max(std_date) from ap.log_summary_rukus)
+        ;
         """
 logger.debug(f"{query=}")
 new_data = pd.read_sql_query(query, source_engine)
