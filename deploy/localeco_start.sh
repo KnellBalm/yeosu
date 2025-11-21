@@ -2,7 +2,7 @@
 
 WORKDIR=module/
 
-DAEMON=LocalEconomy.py
+DAEMON=localeco.py
 
 LOG=${WORKDIR}/log/startup.log
 

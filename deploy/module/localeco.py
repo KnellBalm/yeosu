@@ -87,11 +87,67 @@ def process_local(logger):
     logger.info("✅ Local Pay 데이터 DB 적재 완료")
 
 # ------------------------------------------------------------------------
+# Local Pay 데이터 처리 및 적재 (원본 그대로)
+# ------------------------------------------------------------------------
+def process_local2(logger):
+    logger.info("🚀 Local Pay 데이터 처리 시작")
+    pay_files = sorted(glob.glob(LOCAL_PAY_PATTERN))
+
+    if not pay_files or not os.path.exists(LOCAL_GRID_JSON):
+        logger.error("❌ Local Pay 파일 또는 grid_id 파일을 찾을 수 없습니다.")
+        return
+
+    pay_file = pay_files[-1]
+    logger.info(f"Local Pay 파일: {pay_file}, grid_id 파일: {LOCAL_GRID_JSON}")
+
+    local_pay = pd.read_csv(pay_file)
+
+    # grid JSON 로드
+    with open(LOCAL_GRID_JSON, 'r', encoding='utf-8') as f:
+        local_grid_id = json.load(f)
+
+    # 날짜 변환
+    local_pay['결제년월일'] = pd.to_datetime(local_pay['결제년월일'], format='%Y-%m-%d', errors='coerce')
+    local_pay['생년월일'] = pd.to_datetime(local_pay['생년월일'], format='%Y%m%d', errors='coerce')
+
+    # 기본 전처리
+    local_pay['결제년월'] = local_pay['결제년월일'].dt.strftime('%Y-%m')
+    local_pay['grid_id'] = local_pay['가맹점명'].map(local_grid_id)
+    local_pay['std_ym'] = pd.to_datetime(local_pay['결제년월']).dt.strftime("%Y%m")
+
+    # ---------------------------------------------------------
+    # 🔥 만 나이 계산 (정확하고 안정적인 pandas 공식)
+    # ---------------------------------------------------------
+    pay = local_pay["결제년월일"]
+    birth = local_pay["생년월일"]
+
+    local_pay["나이"] = (pay.dt.year - birth.dt.year - ((pay.dt.month < birth.dt.month) | ((pay.dt.month == birth.dt.month) & (pay.dt.day < birth.dt.day))).astype(int)).astype("Int64")
+    # ---------------------------------------------------------
+
+    # 연령대 구간화
+    bins = [10, 20, 30, 40, 50, 60, 70, 200]
+    labels = ["10대 이하", "20대", "30대", "40대", "50대", "60대", "70대이상"]
+    local_pay["연령대"] = pd.cut(local_pay["나이"], bins=bins, labels=labels)
+
+    # 추가 필드
+    local_pay['grid_id'] = local_pay['grid_id'].astype(str)
+    local_pay['reg_dttm'] = datetime.now()
+
+    # 제거할 컬럼
+    local_pay.drop(columns=['번호',"거주지주소","가맹점주소"], inplace=True, errors='ignore')
+
+    # DB 적재
+    engine = get_engine_from_env()
+    local_pay.to_sql(name='tb_local_pay_raw', con=engine, if_exists='append', index=False, method='multi')
+
+    logger.info("✅ Local Pay 데이터 DB 적재 완료")
+
+# ------------------------------------------------------------------------
 # Main Entry
 # ------------------------------------------------------------------------
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="KCB / Local Pay 데이터 처리 및 DB 적재")
-    parser.add_argument("--target", type=str, required=True, choices=["kcb", "local"], help="처리할 데이터 종류 선택")
+    parser.add_argument("target", type=str, choices=["kcb", "local","all","local2"], help="처리할 데이터 종류 선택")
     args = parser.parse_args()
     logger = setup_logger(f"LocalEconomy-{args.target.upper()}")
     logger.info(f"▶ 실행 대상: {args.target.upper()}")
@@ -100,5 +156,10 @@ if __name__ == "__main__":
             process_kcb(logger)
         elif args.target == "local":
             process_local(logger)
+        elif args.target == "all":
+            process_kcb(logger)
+            process_local(logger)
+        elif args.target == "local2":
+            process_local2(logger)
     except Exception as e:
         logger.exception(f"❌ 실행 중 오류 발생: {e}")
