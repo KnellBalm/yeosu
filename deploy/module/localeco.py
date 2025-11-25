@@ -111,9 +111,9 @@ def process_local2(logger):
     local_pay['생년월일'] = pd.to_datetime(local_pay['생년월일'], format='%Y%m%d', errors='coerce')
 
     # 기본 전처리
-    local_pay['결제년월'] = local_pay['결제년월일'].dt.strftime('%Y-%m')
+    #local_pay['결제년월'] = local_pay['결제년월일'].dt.strftime('%Y-%m')
     local_pay['grid_id'] = local_pay['가맹점명'].map(local_grid_id)
-    local_pay['std_ym'] = pd.to_datetime(local_pay['결제년월']).dt.strftime("%Y%m")
+    #local_pay['std_ym'] = pd.to_datetime(local_pay['결제년월']).dt.strftime("%Y%m")
 
     # ---------------------------------------------------------
     # 🔥 만 나이 계산 (정확하고 안정적인 pandas 공식)
@@ -126,15 +126,31 @@ def process_local2(logger):
 
     # 연령대 구간화
     bins = [10, 20, 30, 40, 50, 60, 70, 200]
-    labels = ["10대 이하", "20대", "30대", "40대", "50대", "60대", "70대이상"]
+    labels = ["10", "20", "30", "40", "50", "60", "70"]
     local_pay["연령대"] = pd.cut(local_pay["나이"], bins=bins, labels=labels)
 
     # 추가 필드
     local_pay['grid_id'] = local_pay['grid_id'].astype(str)
-    local_pay['reg_dttm'] = datetime.now()
+    #local_pay['reg_dttm'] = datetime.now()
+
+    # 성별
+    local_pay['성별'] = local_pay['성별'].map({'남': 'M', '여': 'F'})
+
+    # 컬럼명 변경
+    local_pay.rename(columns={
+        '회원ID' : 'mem_id',
+        '연령대' : 'gens',
+        '결제년월일': 'pay_date',
+        '결제금액': 'pay_amt',
+        '결제년월': 'pay_ym',
+        '성별': 'gender',
+        '업종': 'ind_type',
+    }, inplace=True)
+    # 결제일자 날짜만 추출
+    local_pay['pay_date'] = local_pay['pay_date'].dt.date
 
     # 제거할 컬럼
-    local_pay.drop(columns=['번호',"거주지주소","가맹점주소"], inplace=True, errors='ignore')
+    local_pay.drop(columns=['번호',"거주지주소","가맹점주소","생년월일","가맹점명","나이"], inplace=True, errors='ignore')
 
     # DB 적재
     engine = get_engine_from_env()

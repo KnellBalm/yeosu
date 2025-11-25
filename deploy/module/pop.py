@@ -46,15 +46,33 @@ def run_sql(engine, query: str, params: dict | None = None) -> pd.DataFrame:
     return df
 
 
-def write_to_db(df: pd.DataFrame, table_name: str, engine, schema: str = None, if_exists: str = "replace"):
-    df.to_sql(
-        name=table_name,
-        con=engine,
-        schema=schema,
-        if_exists=if_exists,
-        index=False,
-        method="multi"
-    )
+def write_to_db(df: pd.DataFrame, table_name: str, engine, schema: str = 'public'):
+    # 빈 데이터프레임이면 테이블만 비우고 종료
+    with engine.begin() as conn:
+        try:
+            conn.execute(text(f'TRUNCATE TABLE "{schema}"."{table_name}" RESTART IDENTITY CASCADE'))
+        except Exception:
+            # 테이블이 없을 수 있으므로, 스키마/테이블 구조를 빈 데이터프레임으로 생성
+            df.head(0).to_sql(
+                name=table_name,
+                con=conn,
+                schema=schema,
+                if_exists='replace',
+                index=False
+            )
+
+        if df.empty:
+            return
+
+        # truncate 후 데이터 insert (append 모드)
+        df.to_sql(
+            name=table_name,
+            con=conn,
+            schema=schema,
+            if_exists='append',
+            index=False,
+            method="multi"
+        )
 
 # ===============================
 # 🧹 3. 전처리 함수
@@ -146,8 +164,8 @@ def find_full_addr_id(
 # ===============================
 # 📦 4. 매핑 데이터 로드
 # ===============================
-addr_id_map = json.load(open("../data/json/addr_id_map.json"))
-pop_grid_id = json.load(open("../data/json/pop_grid_id.json"))
+addr_id_map = json.load(open("app/data/json/addr_id_map.json"))
+pop_grid_id = json.load(open("app/data/json/pop_grid_id.json"))
 
 # ===============================
 # 🧹 5. 전처리 함수들
@@ -250,7 +268,6 @@ def run_pipeline_step(step_name: str, query_key: str, preprocess_fn, output_tabl
     logger.info(f"✅ {step_name} 완료")
 
 
-
 # ===============================
 # 🚀 메인 파이프라인
 # ===============================
@@ -258,7 +275,7 @@ logger = setup_logger("population")
 logger.info("🏁 파이프라인 시작")
 
 engine = get_engine_from_env()
-queries = load_sql_sections('../sql/yeosu_query_251113.sql')
+queries = load_sql_sections('app/sql/yeosu_query_251113.sql')
 
 pipeline_steps = [
     ("세대별", "1", preprocess_household, "tb_pop_household_count"),

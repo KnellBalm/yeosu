@@ -5,12 +5,17 @@ import json
 from dotenv import load_dotenv, find_dotenv
 import os
 from datetime import datetime, timedelta
-from utils import setup_logger, get_engine_from_env
+from utils import *
+
+# # .env 파일 로드
+# bundle_path = "/DATA/jupyter_WorkingDirectory/notebook/yeosu/deploy/module/predict_model/xgb_quantile_bundle.joblib"
+# metadata_path = "/DATA/jupyter_WorkingDirectory/notebook/yeosu/deploy/module/predict_model/xgb_quantile_metadata.json"
+# grid_mapping_path = "/DATA/jupyter_WorkingDirectory/notebook/yeosu/deploy/data/json/wifi_grid_id.json"
 
 # .env 파일 로드
-bundle_path = "/DATA/jupyter_WorkingDirectory/notebook/yeosu/deploy/module/predict_model/xgb_quantile_bundle.joblib"
-metadata_path = "/DATA/jupyter_WorkingDirectory/notebook/yeosu/deploy/module/predict_model/xgb_quantile_metadata.json"
-grid_mapping_path = "/DATA/jupyter_WorkingDirectory/notebook/yeosu/deploy/data/json/wifi_grid_id.json"
+bundle_path = "/app/module/predict_model/xgb_quantile_bundle.joblib"
+metadata_path = "/app/module/predict_model/xgb_quantile_metadata.json"
+grid_mapping_path = "/app/data/json/wifi_grid_id.json"
 
 env_path = find_dotenv(usecwd=True)
 if not env_path:
@@ -62,8 +67,9 @@ query = f"""
         FROM ap.log_summary_rukus where std_date = (select max(std_date) from ap.log_summary_rukus)
         ;
         """
-logger.debug(f"{query=}")
+logger.info(f"{query=}")
 new_data = pd.read_sql_query(query, source_engine)
+new_data['ap_id'] = new_data['ap_id'].astype(str)
 logger.info(f"✅ 신규 데이터 로드 완료 : {len(new_data):,} rows")
 
 # 와이파이 - 격자 매핑 ID 가져오기
@@ -71,7 +77,7 @@ wifi_grid_id = json.load(open(grid_mapping_path, "r"))
 
 new_data['grid_id'] = new_data['ap_id'].map(wifi_grid_id)
 new_data['std_date'] = pd.to_datetime(new_data['std_date'])
-new_data = new_data.groupby(['grid_id', 'std_date'], as_index=False).agg(acs_cnt=('acs_cnt', 'sum'))
+new_data = new_data.groupby(['grid_id', 'std_date'], as_index=False).agg(acs_cnt=('cnt', 'sum'))
 
 new_data['month'] = new_data['std_date'].dt.month
 new_data['dayname'] = new_data['std_date'].dt.day_name()
@@ -89,10 +95,24 @@ X = new_data[numeric_features + categorical_features]
 # ============================================
 # 📊 예측 및 결과 병합
 # ============================================
-preds = np.clip(model.predict(X), 0, None)
+logger.info(f"{X.shape=}")
+logger.info(f"X missing values:\n{X.isnull().sum()}")
+
+try:
+    preds_values = model.predict(X)
+except Exception as e:
+    logger.error(f"❌ 예측 중 오류 발생: {e}")
+    raise e
+logger.info(f"Predictions shape: {preds_values.shape}")
+logger.info(f"Predictions min: {preds_values.min()}, max: {preds_values.max()}, mean: {preds_values.mean():.2f}")
+
+preds = np.clip(preds_values, 0, None)
+logger.info(f"Clipped predictions min: {preds.min()}, max: {preds.max()}, mean: {preds.mean():.2f}")
 new_data["predicted_total"] = preds
+
 new_data['grid_id'] = new_data['grid_id'].astype(int)
 logger.info("✅ 예측 완료")
+logger.info(f"Final data shape: {new_data.shape}")
 
 # ============================================
 # 💾 결과 저장

@@ -180,7 +180,7 @@ CREATE TABLE public.tb_flowpop_agg_dayname (
 CREATE_AGG_DAILY = """
 CREATE TABLE public.tb_flowpop_agg_daily (
     crtr_ym varchar(6),
-    admi_cd varchar(20),
+    type bpchar(1),
     etl_ymd date,
     total_population numeric
 );
@@ -271,11 +271,11 @@ def run_sql_aggregations(ym, engine):
         """,
 
         "tb_flowpop_agg_daily":f"""
-        INSERT INTO tb_flowpop_agg_daily (crtr_ym, admi_cd, etl_ymd, total_population)
-        SELECT '{ym}', admi_cd, etl_ymd, ROUND(SUM(total)::numeric,2)
+        INSERT INTO tb_flowpop_agg_daily (crtr_ym, type, etl_ymd, total_population)
+        SELECT '{ym}',type, etl_ymd, ROUND(SUM(total)::numeric,2)
         FROM {tn}
         WHERE etl_ymd >= '{start_s}' AND etl_ymd < '{next_s}'
-        GROUP BY admi_cd, etl_ymd;
+        GROUP BY type, etl_ymd;
         """
     }
 
@@ -318,7 +318,6 @@ def load_flowpop(input_file):
     ]
 
     with tempfile.NamedTemporaryFile(mode='w+', delete=False) as temp_file:
-
         reader = csv.DictReader(open(input_file, 'r', encoding='utf-8', newline=''), delimiter='|')
         all_columns = reader.fieldnames
         selected_columns = [c for c in all_columns if c not in columns_to_exclude]
