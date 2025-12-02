@@ -27,3 +27,5 @@ yeosu_road/
 unzipped_files/
 export_json/
 *.out
+remote/
+remote/LGDP-YEOSU/*

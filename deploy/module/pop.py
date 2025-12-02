@@ -42,7 +42,7 @@ def load_sql_sections(file_path: str) -> dict[str, str]:
             queries[current_name] = "\n".join(buffer).strip()
     return queries
 
-queries = load_sql_sections(f"{BASE_DIR}/sql/yeosu_query_251113.sql")
+queries = load_sql_sections(f"{BASE_DIR}/sql/yeosu_pop_query.sql")
 
 # ===============================
 # 🧩 2. SQL 실행 / 적재 함수
