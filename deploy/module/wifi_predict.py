@@ -1,3 +1,5 @@
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
 import joblib
 import pandas as pd
 import numpy as np
@@ -7,15 +9,12 @@ import os
 from datetime import datetime, timedelta
 from utils import *
 
-# # .env 파일 로드
-# bundle_path = "/DATA/jupyter_WorkingDirectory/notebook/yeosu/deploy/module/predict_model/xgb_quantile_bundle.joblib"
-# metadata_path = "/DATA/jupyter_WorkingDirectory/notebook/yeosu/deploy/module/predict_model/xgb_quantile_metadata.json"
-# grid_mapping_path = "/DATA/jupyter_WorkingDirectory/notebook/yeosu/deploy/data/json/wifi_grid_id.json"
+BASE_DIR = get_base_dir()
 
 # .env 파일 로드
-bundle_path = "/app/module/predict_model/xgb_quantile_bundle.joblib"
-metadata_path = "/app/module/predict_model/xgb_quantile_metadata.json"
-grid_mapping_path = "/app/data/json/wifi_grid_id.json"
+bundle_path = f"{BASE_DIR}/module/predict_model/xgb_quantile_bundle.joblib"
+metadata_path = f"{BASE_DIR}/module/predict_model/xgb_quantile_metadata.json"
+grid_mapping_path = f"{BASE_DIR}/data/json/wifi_grid_id.json"
 
 env_path = find_dotenv(usecwd=True)
 if not env_path:
@@ -76,6 +75,9 @@ logger.info(f"✅ 신규 데이터 로드 완료 : {len(new_data):,} rows")
 wifi_grid_id = json.load(open(grid_mapping_path, "r"))
 
 new_data['grid_id'] = new_data['ap_id'].map(wifi_grid_id)
+# grid_id가 없는(NaN) 데이터는 예측에 사용할 수 없으므로 제거
+new_data.dropna(subset=['grid_id'], inplace=True)
+
 new_data['std_date'] = pd.to_datetime(new_data['std_date'])
 new_data = new_data.groupby(['grid_id', 'std_date'], as_index=False).agg(acs_cnt=('cnt', 'sum'))
 
@@ -109,7 +111,6 @@ logger.info(f"Predictions min: {preds_values.min()}, max: {preds_values.max()}, 
 preds = np.clip(preds_values, 0, None)
 logger.info(f"Clipped predictions min: {preds.min()}, max: {preds.max()}, mean: {preds.mean():.2f}")
 new_data["predicted_total"] = preds
-
 new_data['grid_id'] = new_data['grid_id'].astype(int)
 logger.info("✅ 예측 완료")
 logger.info(f"Final data shape: {new_data.shape}")

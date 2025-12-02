@@ -1,3 +1,5 @@
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
 import argparse
 import pandas as pd
 import json
@@ -9,11 +11,12 @@ from utils import setup_logger, get_engine_from_env, get_src_dir
 # =========================
 # 📁 공통 경로 정의
 # =========================
-BASE_DIR = get_src_dir()
-KCB_PATTERN = os.path.join(BASE_DIR, "YEOSU_SOHO_STAT_*")
-IND_PATTERN = os.path.join(BASE_DIR, "YEOSU_IND_CODE*")
-LOCAL_PAY_PATTERN = os.path.join(BASE_DIR, "local_pay_*")
-LOCAL_GRID_JSON = os.path.join(BASE_DIR, "json/local_grid_id.json")
+BASE_DIR = get_base_dir()
+DATA_DIR = get_src_dir()
+KCB_PATTERN = os.path.join(DATA_DIR, "YEOSU_SOHO_STAT_*")
+IND_PATTERN = os.path.join(DATA_DIR, "YEOSU_IND_CODE*")
+LOCAL_PAY_PATTERN = os.path.join(DATA_DIR, "local_pay_*")
+LOCAL_GRID_JSON = os.path.join(DATA_DIR, "json/local_grid_id.json")
 
 # ------------------------------------------------------------------------
 # KCB 데이터 처리 및 적재
@@ -142,7 +145,6 @@ def process_local2(logger):
         '연령대' : 'gens',
         '결제년월일': 'pay_date',
         '결제금액': 'pay_amt',
-        '결제년월': 'pay_ym',
         '성별': 'gender',
         '업종': 'ind_type',
     }, inplace=True)

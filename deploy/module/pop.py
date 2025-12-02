@@ -2,15 +2,22 @@ import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 import pandas as pd
 pd.set_option('mode.chained_assignment',  None) # <==== 경고를 끈다
-from sqlalchemy import text
+from sqlalchemy import text, inspect, Date, Integer, String
 from datetime import datetime, timedelta
 from utils import *
 import re
 import json
 
+BASE_DIR = get_base_dir()
 
 # ===============================
-# 📘 1. SQL 파서
+# 📦 경로 설정
+# ===============================
+addr_id_map = json.load(open(f"{BASE_DIR}/data/json/addr_id_map.json"))
+pop_grid_id = json.load(open(f"{BASE_DIR}/data/json/pop_grid_id.json"))
+
+# ===============================
+# 📘 SQL 파서
 # ===============================
 def load_sql_sections(file_path: str) -> dict[str, str]:
     """
@@ -35,6 +42,7 @@ def load_sql_sections(file_path: str) -> dict[str, str]:
             queries[current_name] = "\n".join(buffer).strip()
     return queries
 
+queries = load_sql_sections(f"{BASE_DIR}/sql/yeosu_query_251113.sql")
 
 # ===============================
 # 🧩 2. SQL 실행 / 적재 함수
@@ -45,34 +53,81 @@ def run_sql(engine, query: str, params: dict | None = None) -> pd.DataFrame:
         df = pd.DataFrame(result.fetchall(), columns=result.keys())
     return df
 
+def write_to_db(df: pd.DataFrame, table_name: str, engine, schema: str = "public"):
+    # --------------------------------------
+    # 1) 테이블 존재 여부 확인
+    # --------------------------------------
+    inspector = inspect(engine)
+    table_exists = inspector.has_table(table_name, schema=schema)
 
-def write_to_db(df: pd.DataFrame, table_name: str, engine, schema: str = 'public'):
-    # 빈 데이터프레임이면 테이블만 비우고 종료
-    with engine.begin() as conn:
-        try:
-            conn.execute(text(f'TRUNCATE TABLE "{schema}"."{table_name}" RESTART IDENTITY CASCADE'))
-        except Exception:
-            # 테이블이 없을 수 있으므로, 스키마/테이블 구조를 빈 데이터프레임으로 생성
-            df.head(0).to_sql(
-                name=table_name,
-                con=conn,
-                schema=schema,
-                if_exists='replace',
-                index=False
-            )
-
+    # --------------------------------------
+    # 2) 테이블이 없으면 → df 스키마로 생성 (reg_dttm 포함)
+    # --------------------------------------
+    if not table_exists:
+        logger.info(f"⚠ 테이블 없음 → 생성: {schema}.{table_name}")
+        df.head(0).to_sql(
+            name=table_name,
+            con=engine,
+            schema=schema,
+            if_exists='replace',   # 테이블 생성
+            index=False,
+            dtype={
+            'reg_dttm': Date,
+            'grid_id': String(8),
+            'gens': String(2),
+            }
+        )
+        # create만 하고 데이터가 없다면 종료
         if df.empty:
             return
 
-        # truncate 후 데이터 insert (append 모드)
         df.to_sql(
             name=table_name,
-            con=conn,
+            con=engine,
             schema=schema,
-            if_exists='append',
+            if_exists="append",
             index=False,
-            method="multi"
+            method="multi",
+            dtype={
+                'reg_dttm': Date,
+                'grid_id': String(8),
+                'gens': String(2),
+            }
         )
+        return
+
+    # --------------------------------------
+    # 3) 테이블이 있는 경우 → 데이터 추가 (append)
+    # --------------------------------------
+    # logger.info(f"✔ 테이블 존재 → truncate 후 insert: {schema}.{table_name}")
+    #
+    # with engine.connect() as conn:
+    #     conn.execution_options(isolation_level="AUTOCOMMIT").execute(
+    #         text(f'TRUNCATE TABLE "{schema}"."{table_name}" RESTART IDENTITY CASCADE')
+    #     )
+
+    # 데이터가 없다면 종료
+    if df.empty:
+        logger.info(f"✔ 추가할 데이터 없음: {schema}.{table_name}")
+        return
+
+    # --------------------------------------
+    # 4) 데이터 추가 (insert)
+    # --------------------------------------
+    logger.info(f"✔ 테이블 존재 → 데이터 추가: {schema}.{table_name}")
+    df.to_sql(
+        name=table_name,
+        con=engine,
+        schema=schema,
+        if_exists="append",
+        index=False,
+        method="multi",
+        dtype={
+        'reg_dttm': Date,
+        'grid_id': String(8),
+        'gens': String(2),
+            }
+    )
 
 # ===============================
 # 🧹 3. 전처리 함수
@@ -162,13 +217,7 @@ def find_full_addr_id(
     return result
 
 # ===============================
-# 📦 4. 매핑 데이터 로드
-# ===============================
-addr_id_map = json.load(open("app/data/json/addr_id_map.json"))
-pop_grid_id = json.load(open("app/data/json/pop_grid_id.json"))
-
-# ===============================
-# 🧹 5. 전처리 함수들
+# 🧹 전처리 함수들
 # ===============================
 def preprocess_household(df: pd.DataFrame, addr_id_map: dict, pop_grid_id: dict) -> pd.DataFrame:
     # 1) 주소 매핑
@@ -190,6 +239,7 @@ def preprocess_household(df: pd.DataFrame, addr_id_map: dict, pop_grid_id: dict)
         mem_cnt3=('member_count', lambda x: (x == 3).sum()),
         mem_cnt4=('member_count', lambda x: (x >= 4).sum()),
     )
+    gb_df['reg_dttm'] = datetime.now().strftime('%Y-%m-%d')
     return gb_df
 
 def preprocess_inflow(df: pd.DataFrame, addr_id_map: dict, pop_grid_id: dict) -> pd.DataFrame:
@@ -214,6 +264,7 @@ def preprocess_inflow(df: pd.DataFrame, addr_id_map: dict, pop_grid_id: dict) ->
     df = df.groupby(['grid_id', 'gender', 'gens'], as_index=False).agg(
         member_cnt=('jumin_sid', 'count')
     )
+    df['reg_dttm'] = datetime.now().strftime('%Y-%m-%d')
     return df
 
 def preprocess_outflow(df: pd.DataFrame, addr_id_map: dict, pop_grid_id: dict) -> pd.DataFrame:
@@ -238,6 +289,7 @@ def preprocess_outflow(df: pd.DataFrame, addr_id_map: dict, pop_grid_id: dict) -
     df = df.groupby(['grid_id', 'gender', 'gens'], as_index=False).agg(
         member_cnt=('jumin_sid', 'count')
     )
+    df['reg_dttm'] = datetime.now().strftime('%Y-%m-%d')
     return df
 
 def preprocess_totpop(df: pd.DataFrame, addr_id_map: dict, pop_grid_id: dict) -> pd.DataFrame:
@@ -252,7 +304,30 @@ def preprocess_totpop(df: pd.DataFrame, addr_id_map: dict, pop_grid_id: dict) ->
     df = df.groupby(['grid_id', 'gens', 'gender'], as_index=False).agg(
         member_cnt=('jumin_sid', 'count')
     )
+    df['reg_dttm'] = datetime.now().strftime('%Y-%m-%d')
     return df
+
+def preprocess_one_person(df: pd.DataFrame, addr_id_map: dict, pop_grid_id: dict) -> pd.DataFrame:
+    # 1) 주소 매핑
+    df['full_addr_id'] = df.apply(find_full_addr_id, axis=1)
+    df['full_addr_name'] = df['full_addr_id'].map(addr_id_map)
+
+    # 2) grid 매핑
+    df['grid_id'] = df['full_addr_name'].map(pop_grid_id)
+
+    # 3) 유효 grid만 남기기
+    df = df[df['grid_id'].notnull() & (df['grid_id'].str.len() == 8)]
+    df['grid_id'] = df['grid_id'].astype(str)
+    
+    # 4) 세대 만들기
+    df['gens'] = (df['age'] // 10 * 10).astype(str)
+
+    # 5) 1인 가구 집계
+    gb_df = df.groupby(['grid_id', 'gens','gender'], as_index=False).agg(
+        one_person_cnt=('jumin_head_sid', 'count')
+    )
+    gb_df['reg_dttm'] = datetime.now().strftime('%Y-%m-%d')
+    return gb_df
 
 ## ==============================
 # 🚀 파이프라인 실행 함수
@@ -267,7 +342,6 @@ def run_pipeline_step(step_name: str, query_key: str, preprocess_fn, output_tabl
 
     logger.info(f"✅ {step_name} 완료")
 
-
 # ===============================
 # 🚀 메인 파이프라인
 # ===============================
@@ -275,13 +349,13 @@ logger = setup_logger("population")
 logger.info("🏁 파이프라인 시작")
 
 engine = get_engine_from_env()
-queries = load_sql_sections('app/sql/yeosu_query_251113.sql')
 
 pipeline_steps = [
     ("세대별", "1", preprocess_household, "tb_pop_household_count"),
     ("전입자", "2", preprocess_inflow, "tb_pop_inflow_count"),
     ("전출자", "3", preprocess_outflow, "tb_pop_outflow_count"),
     ("총인구", "4", preprocess_totpop, "tb_pop_total_count"),
+    ("1인 가구", "5", preprocess_one_person, "tb_pop_oneperson_count"),
 ]
 
 for step_name, q_key, fn, table in pipeline_steps:
