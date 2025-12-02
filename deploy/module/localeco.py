@@ -6,7 +6,7 @@ import json
 import os
 from datetime import datetime
 import glob
-from utils import setup_logger, get_engine_from_env, get_src_dir
+from utils import *
 
 # =========================
 # 📁 공통 경로 정의
@@ -177,6 +177,7 @@ if __name__ == "__main__":
         elif args.target == "all":
             process_kcb(logger)
             process_local(logger)
+            process_local2(logger)
         elif args.target == "local2":
             process_local2(logger)
     except Exception as e:
