@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from utils import *
 import pandas as pd
 from sqlalchemy import text
+import time
 
 BASE_DIR = get_base_dir()
 
@@ -122,6 +123,7 @@ def ensure_partition(cur, etl_ymd_str):
 # 🚀 메인 ETL 로직
 # -----------------------------------------------------------
 def load_flowpop(input_file):
+    start_time = time.time()
     logger.info(f"시작: {input_file} 파일을 PostgreSQL로 적재합니다.")
 
     engine = get_engine_from_env()
@@ -144,6 +146,7 @@ def load_flowpop(input_file):
     # -------------------------------
     # CSV 변환 단계 최적화
     # -------------------------------
+    logger.debug(f"'{input_file}' 파일을 임시 CSV 파일로 변환 시작")
     with tempfile.NamedTemporaryFile(mode='w+', delete=False) as temp_file:
 
         # CSV reader 준비
@@ -212,6 +215,7 @@ def load_flowpop(input_file):
                     logger.info(f"진행 중: {row_count:,}행 처리 완료")
 
             temp_file.flush()
+    logger.debug(f"임시 CSV 파일 생성 완료: {temp_file.name}, {row_count:,} rows")
 
     # -------------------------------
     # 이후 로직(파티션 구성, COPY, ANALYZE)은 동일
@@ -230,6 +234,7 @@ def load_flowpop(input_file):
     # -------------------------------
     # COPY
     # -------------------------------
+    logger.debug(f"COPY FROM STDIN to {partition_name} using {temp_file.name}")
     with open(temp_file.name, 'r') as f:
         cur.copy_expert(
             f"COPY {partition_name} ({', '.join(final_columns)}) FROM STDIN WITH (FORMAT CSV)",
@@ -264,6 +269,8 @@ def load_flowpop(input_file):
         if os.path.exists(temp_filename):
             os.remove(temp_filename)
             logger.info(f"임시 파일 삭제 완료: {temp_filename}")
+    
+    logger.info(f"ETL 작업 총 소요 시간: {time.time() - start_time:.2f}초")
 
     ####################### 보존 ############################################## # logger.info(f"시작: {input_file} 파일을 PostgreSQL로 적재합니다.")
 
@@ -424,6 +431,7 @@ CREATE TABLE public.tb_flowpop_agg_daily (
 # -----------------------------------------------------------
 
 def run_sql_aggregations(ym, engine):
+    start_time = time.time()
     # 집계 테이블 자동 생성
     ensure_table_exists(engine, "tb_flowpop_agg_agegen", CREATE_AGG_AGEGEN)
     ensure_table_exists(engine, "tb_flowpop_agg_timezn", CREATE_AGG_WEEKDAY)
@@ -528,7 +536,8 @@ def run_sql_aggregations(ym, engine):
                 timezn_gb.to_sql('tb_flowpop_agg_timezn', conn, if_exists='append', index=False, method='multi')
                 logger.info("✔ tb_flowpop_agg_timezn 적재 완료")
 
-        logger.info(f"🎉 전체 집계 완료: {ym}")
+
+        logger.info(f"🎉 전체 집계 완료: {ym} (소요 시간: {time.time() - start_time:.2f}초)")
 
     except Exception as e:
         logger.error(f"❌ 집계 처리 중 오류 발생: {e}")
@@ -543,7 +552,7 @@ if __name__ == "__main__":
     logger = setup_logger("flowpop")
 
     args = parser.parse_args()
-    logger.info("▶ 스크립트 시작")
+    logger.info(f"▶ 스크립트 시작 (대상 월: {args.ym})")
 
     SRC_DIR = get_src_dir()
     pattern = f"*flow_age_time*{args.ym}*.csv"

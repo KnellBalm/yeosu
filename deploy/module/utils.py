@@ -30,7 +30,7 @@ def setup_logger(script_name) -> logging.Logger:
 
     log_file_path = os.path.join(log_dir, f"{script_name}.log")
     logger = logging.getLogger(script_name)
-    logger.setLevel(logging.INFO)
+    logger.setLevel(logging.DEBUG)
 
     if not logger.handlers:
         # 파일 핸들러: 10MB 크기 제한, 5개 백업 유지
@@ -83,7 +83,7 @@ def get_base_dir():
     DATA_DIR 환경변수가 설정되어 있으면 해당 값을 반환하고,
     그렇지 않으면 기본값 '../data'를 반환합니다.
     """
-    return os.getenv("APP_ROOT", "deploy")
+    return os.getenv("APP_ROOT", "/app")
 
 
 def get_grid_id(points_gdf: gpd.GeoDataFrame, grid_gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:

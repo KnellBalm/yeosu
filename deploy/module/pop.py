@@ -6,15 +6,21 @@ from sqlalchemy import text, inspect, Date, Integer, String
 from datetime import datetime, timedelta
 from utils import *
 import re
+import os
 import json
 
 BASE_DIR = get_base_dir()
+DATA_DIR = get_src_dir()
+logger = setup_logger("population")
+logger.debug(f"✅ 경로 설정 완료: BASE_DIR={BASE_DIR}, DATA_DIR={DATA_DIR}")
 
 # ===============================
 # 📦 경로 설정
 # ===============================
-addr_id_map = json.load(open(f"{BASE_DIR}/data/json/addr_id_map.json"))
-pop_grid_id = json.load(open(f"{BASE_DIR}/data/json/pop_grid_id.json"))
+with open(os.path.join(BASE_DIR, "data", "json", "addr_id_map.json"), 'r', encoding='utf-8') as f:
+    addr_id_map = json.load(f)
+with open(os.path.join(BASE_DIR, "data", "json", "pop_grid_id.json"), 'r', encoding='utf-8') as f:
+    pop_grid_id = json.load(f)
 
 # ===============================
 # 📘 SQL 파서
@@ -42,7 +48,9 @@ def load_sql_sections(file_path: str) -> dict[str, str]:
             queries[current_name] = "\n".join(buffer).strip()
     return queries
 
-queries = load_sql_sections(f"{BASE_DIR}/sql/yeosu_pop_query.sql")
+sql_file_path = os.path.join(BASE_DIR, "sql", "yeosu_pop_query.sql")
+queries = load_sql_sections(sql_file_path)
+logger.debug(f"Loaded {len(queries)} queries from {sql_file_path}")
 
 # ===============================
 # 🧩 2. SQL 실행 / 적재 함수
@@ -336,8 +344,13 @@ def run_pipeline_step(step_name: str, query_key: str, preprocess_fn, output_tabl
                       engine, queries, addr_id_map, pop_grid_id):
     logger.info(f"▶ {step_name} 시작")
 
+    logger.debug(f"[{step_name}] Running SQL query: '{query_key}'")
     df = run_sql(engine, queries[query_key])
+    logger.debug(f"[{step_name}] SQL result shape: {df.shape}")
+    logger.debug(f"[{step_name}] Preprocessing DataFrame...")
     df = preprocess_fn(df, addr_id_map, pop_grid_id)
+    logger.debug(f"[{step_name}] Preprocessed DataFrame shape: {df.shape}")
+    logger.debug(f"[{step_name}] Writing to table: '{output_table}'")
     write_to_db(df, output_table, engine)
 
     logger.info(f"✅ {step_name} 완료")
@@ -345,7 +358,6 @@ def run_pipeline_step(step_name: str, query_key: str, preprocess_fn, output_tabl
 # ===============================
 # 🚀 메인 파이프라인
 # ===============================
-logger = setup_logger("population")
 logger.info("🏁 파이프라인 시작")
 
 engine = get_engine_from_env()
