@@ -27,3 +27,4 @@ yeosu_road/
 unzipped_files/
 export_json/
 *.out
+deploy_old/

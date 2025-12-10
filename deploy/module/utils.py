@@ -1,34 +1,49 @@
 import os
 import logging
+from logging.handlers import RotatingFileHandler
 from sqlalchemy import create_engine
 from dotenv import load_dotenv
 import geopandas as gpd
 
-# .env 파일 로드 (한 번만)
-load_dotenv()
+# load_dotenv()
+
+# .env 파일 경로를 명시적으로 지정하여 로드
+# 이 파일(utils.py)의 상위 디렉토리(deploy)에 있는 .env 파일을 찾음
+dotenv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env')
+load_dotenv(dotenv_path=dotenv_path)
+
 
 def setup_logger(script_name) -> logging.Logger:
     """
     스크립트 이름을 기반으로 로거를 설정합니다.
     로그 파일은 LOG_DIR 환경변수에 지정된 디렉토리에 저장됩니다.
-    디렉토리가 없으면 생성합니다.
+    로그 파일은 10MB가 되면 자동으로 교체(rotate)되며, 최대 5개까지 백업 파일이 유지됩니다.
+
     Parameters
     ----------
     script_name : str
         로거 이름 및 로그 파일 이름에 사용될 스크립트 이름
     """
     log_dir = os.getenv("LOG_DIR", "./logs")
-    log_file_path = os.path.join(log_dir, f"{script_name}.log")
     if not os.path.exists(log_dir):
         os.makedirs(log_dir, exist_ok=True)
+
+    log_file_path = os.path.join(log_dir, f"{script_name}.log")
     logger = logging.getLogger(script_name)
+    logger.setLevel(logging.DEBUG)
+
     if not logger.handlers:
-        logging.basicConfig(
-            filename=log_file_path,
-            level=logging.INFO,
-            format="%(asctime)s [%(levelname)s] %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S"
+        # 파일 핸들러: 10MB 크기 제한, 5개 백업 유지
+        handler = RotatingFileHandler(
+            log_file_path, 
+            maxBytes=10*1024*1024,  # 10 MB
+            backupCount=5,
+            encoding='utf-8'
         )
+        formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+
     return logger
 
 def get_engine_from_env(
@@ -61,6 +76,15 @@ def get_src_dir():
     그렇지 않으면 기본값 '../data'를 반환합니다.
     """
     return os.getenv("DATA_DIR", "../data")
+
+def get_base_dir():
+    """
+    소스 코드 디렉토리 경로를 반환합니다.
+    DATA_DIR 환경변수가 설정되어 있으면 해당 값을 반환하고,
+    그렇지 않으면 기본값 '../data'를 반환합니다.
+    """
+    return os.getenv("APP_ROOT", "/app")
+
 
 def get_grid_id(points_gdf: gpd.GeoDataFrame, grid_gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     """

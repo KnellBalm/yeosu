@@ -1,0 +1,59 @@
+version: "3.9"
+
+x-app-base: &app-base
+  image: repo.iris.tools/lodp/yeosu-analysis:latest
+  working_dir: /app
+  volumes:
+    - ${DATA_DIR}:/data:ro
+    - ${LOG_DIR}:/app/logs
+
+x-app-env: &app-env
+  LOG_DIR: /app/logs
+  DATA_BASE_DIR: ${DATA_BASE_DIR:-/data}
+  DB_HOST: ${DB_HOST:?Set DB_HOST in environment or .env}
+  DB_PORT: ${DB_PORT:-5432}
+  DB_USER: ${DB_USER:?Set DB_USER in environment or .env}
+  DB_PASS: ${DB_PASS:?Set DB_PASS in environment or .env}
+  DB_NAME: ${DB_NAME:?Set DB_NAME in environment or .env}
+  DATA_DIR: ${DATA_DIR:?Set DATA_DIR in environment or .env}
+
+services:
+  flowpop:
+    <<: *app-base
+    command: ["/bin/bash", "/app/scripts/run_flowpop.sh"]
+    env_file: .env
+    environment:
+      <<: *app-env
+      FLOWPOP_YM: ${FLOWPOP_YM:-}
+
+  localeconomy:
+    <<: *app-base
+    command: ["/bin/bash", "/app/scripts/run_localeconomy.sh"]
+    env_file: .env
+    environment:
+      <<: *app-env
+      LOCALECONOMY_TARGET: ${LOCALECONOMY_TARGET:-}
+
+  pop:
+    <<: *app-base
+    command: ["/bin/bash", "/app/scripts/run_pop.sh"]
+    env_file: .env
+    environment:
+      <<: *app-env
+      POP_TARGET: ${POP_TARGET:-}
+
+  wifi_predict:
+    <<: *app-base
+    command: ["/bin/bash", "/app/scripts/run_wifi_predict.sh"]
+    env_file: .env
+    environment:
+      <<: *app-env
+      WIFI_DB_HOST: ${WIFI_DB_HOST:-}
+      WIFI_DB_PORT: ${WIFI_DB_PORT:-5432}
+      WIFI_DB_USER: ${WIFI_DB_USER:-}
+      WIFI_DB_PASS: ${WIFI_DB_PASS:-}
+      WIFI_DB_NAME: ${WIFI_DB_NAME:-}
+      WIFI_MODEL_BASE_DIR: ${WIFI_MODEL_BASE_DIR:-/app/module/predict_model}
+      WIFI_MODEL_BUNDLE_PATH: ${WIFI_MODEL_BUNDLE_PATH:-}
+      WIFI_MODEL_METADATA_PATH: ${WIFI_MODEL_METADATA_PATH:-}
+      WIFI_GRID_MAPPING_PATH: ${WIFI_GRID_MAPPING_PATH:-}
